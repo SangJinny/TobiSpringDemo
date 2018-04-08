@@ -4,14 +4,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import user.dao.ConnectionMaker;
 import user.dao.DConnectionMaker;
-import user.dao.UserDao;
+import user.dao.UserDaoJdbc;
 
 @Configuration
 public class DaoFactory {
 
     @Bean
-    public UserDao userDao() {
-        return new UserDao();
+    public UserDaoJdbc userDao() {
+        return new UserDaoJdbc();
     }
 
     @Bean
