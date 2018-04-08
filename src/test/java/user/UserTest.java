@@ -14,7 +14,7 @@ import user.domain.User;
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(locations = "/applicationContext.xml")
 public class UserTest {
-    User user;
+    private User user;
 
     @Before
     public void setUp() {
