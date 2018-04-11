@@ -7,6 +7,9 @@ import org.junit.Test;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.*;
+import static user.service.UserServiceImpl.*;
 
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,11 +20,14 @@ import org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator;
 import org.springframework.jdbc.support.SQLExceptionTranslator;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.transaction.PlatformTransactionManager;
 import user.dao.UserDao;
-import user.dao.UserDaoJdbc;
 import user.domain.Level;
 import user.domain.User;
+import user.service.TestUserService;
 import user.service.UserService;
+import user.service.UserServiceImpl;
+import user.service.UserServiceTx;
 
 import javax.sql.DataSource;
 import java.sql.SQLException;
@@ -45,6 +51,8 @@ public class UserDaoJdbcTest {
     private UserService userService;
     @Autowired
     private UserDao dao;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private User user1;
     private User user2;
@@ -151,19 +159,90 @@ public class UserDaoJdbcTest {
     }
 
     @Test
-    public void upgradeLevels() {
+    public void upgradeLevels() throws Exception{
+        UserServiceImpl userServiceImpl = new UserServiceImpl();
+        MockUserDao mockUserDao = new MockUserDao(this.userList);
+        userServiceImpl.setUserDao(mockUserDao);
+
         dao.deleteAll();
         for(User user: userList) {
             dao.add(user);
         }
-        userService.upgradeLevels();
+        userServiceImpl.upgradeLevels();
+
+        List<User> updated = mockUserDao.getUpdated();
+        assertThat(updated.size(), is(2));
+        checkLevel(updated.get(0), Level.BASIC);
+        checkLevel(updated.get(1), Level.SILVER);
+
+        /*
         checkLevel(userList.get(0), Level.BASIC);
         checkLevel(userList.get(1), Level.SILVER);
         checkLevel(userList.get(2), Level.SILVER);
         checkLevel(userList.get(3), Level.GOLD);
-        checkLevel(userList.get(4), Level.GOLD);
+        checkLevel(userList.get(4), Level.GOLD);*/
     }
 
+    // UserDao의 Mock Object를 만들기 위한 클래스
+    // UserServiceImpl을 고립시켜 테스트하기 위함.
+    static class MockUserDao implements UserDao {
+        private List<User> users;
+        private List<User> updated = new ArrayList<>();
+        private MockUserDao(List<User> users) {
+            this.users = users;
+        }
+        private List<User> getUpdated() {
+            return this.updated;
+        }
+        @Override
+        public List<User> getAll() {
+            return this.users;
+        }
+
+        public void update(User user) {
+            updated.add(user);
+        }
+
+        // 테스트에 사용하지 않을 메소드
+        @Override
+        public void add(User user) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void deleteAll() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public int getCount() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public User get(String id) {
+            throw new UnsupportedOperationException();
+        }
+    }
+    // Mockito를 활용한 방법..
+    @Test
+    public void MockUpgradeLevels() {
+        UserServiceImpl userServiceImpl = new UserServiceImpl();
+
+        UserDao mockUserDao = mock(UserDao.class);
+        when(mockUserDao.getAll()).thenReturn(this.userList);
+        userServiceImpl.setUserDao(mockUserDao);
+
+        userServiceImpl.upgradeLevels();
+
+        verify(mockUserDao, times(2)).update(any(User.class));
+        verify(mockUserDao, times(2)).update(any(User.class));
+        verify(mockUserDao).update(userList.get(1));
+        assertThat(userList.get(1).getLevel(), is(Level.SILVER));
+        verify(mockUserDao).update(userList.get(3));
+        assertThat(userList.get(3).getLevel(), is(Level.GOLD));
+
+    }
     @Test
     public void add() {
         User userWithoutLevel = new User("77", "전상진", "PWD", null, 0, 0);
@@ -178,6 +257,26 @@ public class UserDaoJdbcTest {
         assertThat(tempUser.getLevel(), is(userWithLevel.getLevel()));
     }
 
+    @Test
+    public void upgradeAllOrNothing() throws Exception{
+        UserServiceImpl testUserService = new TestUserService(userList.get(3).getId());
+        testUserService.setUserDao(this.dao);
+
+        UserServiceTx txUserService = new UserServiceTx();
+        txUserService.setTransactionManager(transactionManager);
+        txUserService.setUserService(userService);
+
+        dao.deleteAll();
+        for(User user: userList) {
+            dao.add(user);
+        }
+        try{
+            testUserService.upgradeLevels();
+            fail("TestUserServiceException expected");
+        } catch (TestUserServiceException e) {
+
+        }
+    }
     private void checkSameUser(User user1, User user2) {
         assertThat(user1.getId(), is(user2.getId()));
         assertThat(user1.getName(), is(user2.getName()));
