@@ -12,22 +12,21 @@ import static org.mockito.Mockito.*;
 import static user.service.UserServiceImpl.*;
 
 import org.junit.runner.RunWith;
+import org.springframework.aop.framework.ProxyFactoryBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator;
 import org.springframework.jdbc.support.SQLExceptionTranslator;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.transaction.PlatformTransactionManager;
 import user.dao.UserDao;
 import user.domain.Level;
 import user.domain.User;
-import user.service.TestUserService;
-import user.service.UserService;
-import user.service.UserServiceImpl;
-import user.service.UserServiceTx;
+import user.service.*;
 
 import javax.sql.DataSource;
 import java.sql.SQLException;
@@ -49,6 +48,8 @@ public class UserDaoJdbcTest {
     private DataSource dataSource;
     @Autowired
     private UserService userService;
+    @Autowired
+    private UserService testUserService;
     @Autowired
     private UserDao dao;
     @Autowired
@@ -258,23 +259,31 @@ public class UserDaoJdbcTest {
     }
 
     @Test
+    @DirtiesContext
     public void upgradeAllOrNothing() throws Exception{
-        UserServiceImpl testUserService = new TestUserService(userList.get(3).getId());
-        testUserService.setUserDao(this.dao);
+        //UserServiceImpl testUserService = new TestUserServiceImpl(userList.get(3).getId());
+        //testUserService.setUserDao(this.dao);
 
+        /* 팩토리빈 자체를 가져온다. */
+        //ProxyFactoryBean txProxyFactoryBean = context.getBean("&userService", ProxyFactoryBean.class);
+        //txProxyFactoryBean.setTarget(testUserService);
+
+        //UserService txUserService = (UserService) txProxyFactoryBean.getObject();
+
+        /*
         UserServiceTx txUserService = new UserServiceTx();
         txUserService.setTransactionManager(transactionManager);
         txUserService.setUserService(userService);
-
+        */
         dao.deleteAll();
         for(User user: userList) {
             dao.add(user);
         }
         try{
-            testUserService.upgradeLevels();
+            this.testUserService.upgradeLevels();
             fail("TestUserServiceException expected");
         } catch (TestUserServiceException e) {
-
+            System.out.println("success");
         }
     }
     private void checkSameUser(User user1, User user2) {

@@ -3,10 +3,17 @@
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:tx="http://www.springframework.org/schema/tx"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
        xsi:schemaLocation="http://www.springframework.org/schema/beans
             http://www.springframework.org/schema/beans/spring-beans.xsd
+            http://www.springframework.org/schema/aop
+            http://www.springframework.org/schema/aop/spring-aop-3.0.xsd
             http://www.springframework.org/schema/tx
             http://www.springframework.org/schema/tx/spring-tx.xsd">
+    <aop:config>
+        <aop:pointcut id="transactionPointcut" expression="execution(* *..*ServiceImpl.upgrade*(..))"/>
+        <aop:advisor advice-ref="transactionAdvice" pointcut-ref="transactionPointcut"/>
+    </aop:config>
     <bean id="dataSource" 
           class="org.springframework.jdbc.datasource.SimpleDriverDataSource">
         <property name="driverClass" value="com.mysql.jdbc.Driver"/>
@@ -25,14 +32,40 @@
         <property name="jdbcContext" ref="jdbcContext"/>
         <property name="jdbcTemplate" ref="jdbcTemplete"/>
     </bean>
-    <bean id="userService" class="user.service.UserServiceTx">
-        <property name="userService" ref="userServiceImpl"/>
-        <property name="transactionManager" ref="transactionManager"/>
+
+
+    <!-- 자동프록시생성기를 등록함으로써.. 이제 타겟을 설정으로 주입하는 일은 필요 없음....
+    데코레이터를 팩토리빈으로 변경한거를 ProxyFactoryBean으로 변경
+    <bean id="userService" class="org.springframework.aop.framework.ProxyFactoryBean">
+
+        <property name="target" ref="userServiceImpl"/>
+        <property name="interceptorNames">
+            <list>
+                <value>transactionAdvisor</value>
+            </list>
+        </property>
     </bean>
-    <bean id="userServiceImpl" class="user.service.UserServiceImpl">
+    -->
+    <!-- 타겟 -->
+    <bean id="userService" class="user.service.UserServiceImpl">
         <property name="userDao" ref="userDao"/>
     </bean>
+    <!-- 팩토리빈 -->
     <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
         <property name="dataSource" ref="dataSource"/>
     </bean>
+    <bean id="transactionAdvice" class="user.service.TransactionAdvice">
+        <property name="transactionManager" ref="transactionManager"/>
+    </bean>
+    <bean id="transactionAdvisor" class="org.springframework.aop.support.DefaultPointcutAdvisor">
+        <property name="advice" ref="transactionAdvice"/>
+        <property name="pointcut" ref="transactionPointcut"/>
+    </bean>
+    <bean class="org.springframework.aop.framework.autoproxy.DefaultAdvisorAutoProxyCreator"/>
+    <bean id="transactionPointcut" class="org.springframework.aop.aspectj.AspectJExpressionPointcut">
+        <property name="expression" value="execution(* *..*ServiceImpl.upgrade*(..))"/>
+    </bean>
+
+    <!-- 테스트용 UserServiceImpl을 등록-->
+    <bean id="testUserService" class="user.service.TestUserServiceImpl" parent="userService"/>
 </beans>
